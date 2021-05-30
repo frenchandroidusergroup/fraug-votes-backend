@@ -1,12 +1,11 @@
 package fraug.votes.backend.model
 
+import com.expediagroup.graphql.generator.annotations.GraphQLDescription
 import com.expediagroup.graphql.server.operations.Mutation
 import com.expediagroup.graphql.server.operations.Query
 import com.expediagroup.graphql.server.operations.Subscription
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.reactive.asPublisher
 import org.mindrot.jbcrypt.BCrypt
@@ -22,7 +21,7 @@ class RootQuery : Query {
 class RootMutation : Mutation {
   fun setup(password: String): Boolean {
     val existingPasswordHash = Firestore.getPasswordHash()
-    check (existingPasswordHash == null) {
+    check(existingPasswordHash == null) {
       "This instance has already been set up"
     }
 
@@ -33,6 +32,10 @@ class RootMutation : Mutation {
   }
 
   fun admin(password: String): Admin {
+    check(BCrypt.checkpw(password, Firestore.getPasswordHash())) {
+      "wrong password"
+    }
+
     return Admin()
   }
 
@@ -55,59 +58,64 @@ class RootMutation : Mutation {
 @Component
 class RootSubscription : Subscription {
   @OptIn(FlowPreview::class)
-  fun votes(questionId: String): Publisher<List<Vote>> {
+  @GraphQLDescription("Listens to votes for a given question")
+  fun votes(questionId: String): Publisher<List<VoteCount>> {
     val choiceIds = Firestore.getQuestionChoices(questionId)
 
     check(choiceIds != null)
 
     return Firestore.listenToVotes(questionId).map { votes ->
       choiceIds.map { choiceId ->
-        Vote(choiceId, votes.count { vote -> vote == choiceId })
-      } + Vote(null, votes.count { vote -> !choiceIds.contains(vote)})
+        VoteCount(choiceId, votes.count { vote -> vote == choiceId })
+      } + VoteCount(null, votes.count { vote -> !choiceIds.contains(vote) })
     }.debounce(100)
       .asPublisher()
   }
 }
 
+@GraphQLDescription("The root for mutation that requires the admin password.")
 class Admin {
+  @GraphQLDescription("Deletes the admin password. Always true.")
   fun deletePassword(): Boolean {
     Firestore.deletePasswordHash()
     return true
   }
 
-  /**
-   * Create a new question
-   *
-   * @param id a unique id for this question
-   * @param choiceIds a list of choices. For a given question, all choices must be different
-   * This is typically the identifier that users will input in the Twitch chat with `!benjamin`
-   */
-  fun createQuestion(questionId: String, choiceIds: List<String>): Boolean {
+  @GraphQLDescription("Create a new question. Always true.")
+  fun createQuestion(
+    @GraphQLDescription("a unique id for this question")
+    questionId: String,
+    @GraphQLDescription(" a list of choices. For a given question, all choices must be different. This is typically the identifier that users will input in the Twitch chat with `!benjamin`")
+    choiceIds: List<String>
+  ): Boolean {
+    check(choiceIds.size >= 2) {
+      "A question must have at least two choiceIds"
+    }
     Firestore.createQuestion(questionId, choiceIds)
     return true
   }
 
-  /**
-   * Activate the given question. Votes will use this question from now on
-   *
-   * @param questionId the question to activate or null to deactivate all questions
-   *
-   * @return always returns true. Failures will be returned as errors
-   */
+  @GraphQLDescription("Activate the given question. Votes will use this question from now on")
   fun activateQuestion(questionId: String?): Boolean {
     Firestore.setActiveQuestion(questionId)
     return true
   }
 
   /**
-   * Delete the given question
+   *
    *
    * @return always returns true. Failures will be returned as errors
    */
+  @GraphQLDescription("Delete the given question. Always true.")
   fun deleteQuestion(questionId: String): Boolean {
     Firestore.deleteQuestion(questionId)
     return true
   }
 }
 
-class Vote(val choiceId: String?, val count: Int)
+@GraphQLDescription("The number of votes for a given choice.")
+class VoteCount(
+  @GraphQLDescription("The choiceId. null for votes with an invalid choiceId.")
+  val choiceId: String?,
+  val count: Int
+)
