@@ -24,3 +24,20 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).conf
     freeCompilerArgs = freeCompilerArgs + "-Xopt-in=kotlin.RequiresOptIn"
   }
 }
+
+/**
+ * Deploy the executable jar by default
+ * See https://docs.spring.io/spring-boot/docs/2.5.0/gradle-plugin/reference/htmlsingle/#packaging-executable.and-plain-archives
+ */
+tasks.getByName<Jar>("jar") {
+  enabled = false
+}
+
+appengine {
+  this.stage {
+    this.setArtifact(tasks.named("bootJar").flatMap {
+      it as Jar
+      it.archiveFile
+    })
+  }
+}

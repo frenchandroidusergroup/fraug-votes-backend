@@ -48,6 +48,12 @@ object Firestore {
         return documentRef.get().get().get("choiceIds") as List<String>?
     }
 
+    fun getQuestions(): List<FirestoreQuestion> {
+        return firestoreDb.collection("question").listDocuments()
+          .map {
+              FirestoreQuestion(it.id, getQuestionChoices(it.id) ?: emptyList())
+          }
+    }
 
     fun deleteQuestion(questionId: String) {
         val documentRef = firestoreDb.document("question/$questionId")
@@ -100,3 +106,4 @@ object Firestore {
     private fun withTransaction(block: (Transaction) -> Unit)  = firestoreDb.runTransaction { block(it) }.get()
 }
 
+class FirestoreQuestion(val id: String, val choiceIds: List<String>)

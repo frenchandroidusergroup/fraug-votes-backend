@@ -1,6 +1,5 @@
 include(":server")
 
-
 pluginManagement {
   repositories {
     gradlePluginPortal()

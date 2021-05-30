@@ -6,15 +6,21 @@ import com.expediagroup.graphql.server.operations.Query
 import com.expediagroup.graphql.server.operations.Subscription
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.reactive.asPublisher
+import kotlinx.coroutines.runBlocking
 import org.mindrot.jbcrypt.BCrypt
 import org.reactivestreams.Publisher
 import org.springframework.stereotype.Component
 
 @Component
 class RootQuery : Query {
-  fun test(): Int = 0
+  fun questions(): List<Question> {
+    return Firestore.getQuestions().map {
+      Question(it.id, it.choiceIds)
+    }
+  }
 }
 
 @Component
@@ -119,3 +125,15 @@ class VoteCount(
   val choiceId: String?,
   val count: Int
 )
+
+class Question(val id: String, val choiceIds: List<String>) {
+  fun votes(): List<VoteCount> {
+    return runBlocking {
+      Firestore.listenToVotes(id).first().let { votes ->
+        choiceIds.map { choiceId ->
+          VoteCount(choiceId, votes.count { vote -> vote == choiceId })
+        } + VoteCount(null, votes.count { vote -> !choiceIds.contains(vote) })
+      }
+    }
+  }
+}
