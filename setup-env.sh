@@ -1,0 +1,1 @@
+export GOOGLE_APPLICATION_CREDENTIALS=/Users/mbonnin/git/fraug-votes-backend/fraug-votes-06852e84acde.json
